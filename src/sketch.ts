@@ -1,26 +1,64 @@
-import * as p5Global from 'p5/global'
-import {  saveCanvasToFile, manageSeedState } from 'ga-lib';
-
+import * as p5Global from "p5/global";
+import { saveCanvasToFile, manageSeedState } from "ga-lib";
+import solveMultiLineIntersections from "./lib/multiline-intersection-solver";
 
 const urlParams = new URLSearchParams(window.location.search);
 
 window.setup = () => {
     manageSeedState();
-    createCanvas(1000, 600); //You can add SVG here like this: createCanvas(1000, 600, SVG);
-}
+    createCanvas(1000, 700); //You can add SVG here like this: createCanvas(1000, 600, SVG);
+    colorMode(HSL);
+};
 
 window.draw = () => {
-    background(0)
-    for (let i = 0; i < 10; i++) {
-        fill(random(255), random(255), random(255));
-        circle(random(width), random(height), 30);
-    }
+    background(240);
+    strokeWeight(1);
+    noFill();
 
-    // Start doing cool stuff here 8^)
+    const lines = [
+        [
+            { x: 100, y: 100 },
+            { x: 621, y: 550 },
+            { x: 125, y: 500 },
+            { x: 525, y: 50 },
+            { x: 725, y: 250 },
+            { x: 100, y: 600 },
+        ],
+    ];
+    lines.push([
+        { x: 20, y: 200 },
+        { x: 800, y: 170 },
+        { x: 300, y: 630 },
+    ]);
 
+    lines.forEach((l, i) => {
+        stroke(i * 50, 100, 80);
+        drawLine(l);
+        l.forEach((v) => circle(v.x, v.y, 8));
+    });
+
+    strokeWeight(1);
+    stroke(0);
+    const result = solveMultiLineIntersections(lines, 20);
+
+    strokeWeight(4);
+    //console.log(result);
+    result.forEach((lineGroup, i) => {
+        let baseHue = i * 50;
+        lineGroup.forEach((l, j) => {
+            stroke(baseHue + 3 * j, 100, 60);
+            drawLine(l);
+        });
+    });
 
     noLoop();
-    if (urlParams.has('saveCanvas') && urlParams.get('saveCanvas') === 'true') {
-        saveCanvasToFile('gen-art-sketch', false, 'png'); //Set to SVG as needed. 
+    if (urlParams.has("saveCanvas") && urlParams.get("saveCanvas") === "true") {
+        saveCanvasToFile("gen-art-sketch", false, "png"); //Set to SVG as needed.
     }
-}
+};
+
+const drawLine = (points) => {
+    beginShape();
+    points.forEach((p) => vertex(p.x, p.y));
+    endShape();
+};
