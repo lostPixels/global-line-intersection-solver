@@ -1,3 +1,4 @@
+import { angle } from "ga-lib";
 import { drawLine } from "../sketch";
 
 interface Point {
@@ -16,18 +17,19 @@ interface Multiline {
  */
 export default function solveMultiLineIntersections(multiLines: Multiline[], distanceThreshold: number) {
     const lines = deconstructAllMultilines(multiLines);
-    const result = trimLines(lines);
+    const result = trimLines(lines, distanceThreshold);
 
-    lines.forEach((l) => {
-        stroke(random(360), 80, random(20, 70));
-        strokeWeight(2);
-        drawLine([l.p1, l.p2]);
-    });
+    // lines.forEach((l) => {
+    //     stroke(random(360), 80, random(20, 70));
+    //     strokeWeight(2);
+    //     drawLine([l.p1, l.p2]);
+    // });
 
     result.forEach((l) => {
         stroke(random(360), 80, random(20, 70));
         strokeWeight(5);
-        drawLine([l.p1, l.p2]);
+        drawLine(l);
+        //drawLine([l.p1, l.p2]);
     });
 }
 
@@ -53,14 +55,14 @@ function deconstructAllMultilines(multilines) {
     return res;
 }
 
-function trimLines(lines) {
+function trimLines(lines, distanceThreshold) {
     let i = 0;
     const length = lines.length;
     let res = [];
 
     while (i < length) {
-        const list = lines.filter((_, j) => j !== i);
-        const trimResult = trimIndividualLine(lines[i], list);
+        const list = lines; //lines.filter((_, j) => j !== i);
+        const trimResult = trimIndividualLine(lines[i], list, distanceThreshold);
         if (trimResult.length) res = res.concat(trimResult);
         i++;
     }
@@ -68,13 +70,77 @@ function trimLines(lines) {
     return res;
 }
 
-function trimIndividualLine(line, list) {
+function trimIndividualLine(line, list, distanceThreshold) {
+    let lines = [];
+    let newLine = [];
+
     let intersections = findAllIntersectionsOfLineToLineList(line, list);
-    if (intersections.length === 0) return [line];
+    if (intersections.length === 0) return [[line.p1, line.p2]];
 
-    //Trim line down here.
+    intersections.forEach((int, i) => {
+        if (i === 0) newLine.push(line.p1);
 
-    return [];
+        const otherLine = list[int.lineTouchedID];
+        let res = calculateNewLineEnding(line, otherLine, int.point, distanceThreshold);
+        newLine.push(res[1]);
+        lines.push(newLine);
+        newLine = [res[0]];
+        //newLine.push(line.p2);
+    });
+    newLine.push(line.p2);
+    if (newLine.length > 0) lines.push(newLine);
+    return lines;
+}
+
+export function calculateNewLineEnding(line1, line2, centerPoint, distanceThreshold) {
+    circle(centerPoint.x, centerPoint.y, 30);
+
+    // --- Step 1: Calculate slopes and the angle between the lines ---
+    const slope1 = calculateSlope(line1);
+    const slope2 = calculateSlope(line2);
+
+    if (slope1 === slope2) {
+        return "Lines are parallel. A unique point cannot be found.";
+    }
+
+    const tanTheta = Math.abs((slope2 - slope1) / (1 + slope1 * slope2));
+    const theta = Math.atan(tanTheta);
+
+    if (theta === 0) {
+        console.log("Lines are parallel.");
+        return false;
+    }
+
+    // --- Step 2: Calculate how far to travel from the center along line1 ---
+    const distFromCenter = distanceThreshold / Math.sin(theta);
+
+    // --- Step 3: Find the coordinates of the two possible ending points ---
+    // 3a. Create a direction vector directly from the points of line1.
+    const dirVec = {
+        x: line1.p2.x - line1.p1.x,
+        y: line1.p2.y - line1.p1.y,
+    };
+
+    // 3b. Create a unit vector (length of 1) to define the direction.
+    const mag = Math.sqrt(dirVec.x ** 2 + dirVec.y ** 2);
+    const unitVec = {
+        x: dirVec.x / mag,
+        y: dirVec.y / mag,
+    };
+
+    // 3c. Calculate the final points by moving from the center along the unit vector.
+    const point1 = {
+        x: centerPoint.x + distFromCenter * unitVec.x,
+        y: centerPoint.y + distFromCenter * unitVec.y,
+    };
+
+    const point2 = {
+        x: centerPoint.x - distFromCenter * unitVec.x,
+        y: centerPoint.y - distFromCenter * unitVec.y,
+    };
+
+    let results = [point1, point2].sort((a, b) => dist(a.x, a.y, line1.p2.x, line1.p2.y) - dist(b.x, b.y, line1.p2.x, line1.p2.y));
+    return results;
 }
 
 //BBL
@@ -125,8 +191,9 @@ function findAllIntersectionsOfLineToLineList(line1, list) {
     const res = [];
 
     list.forEach((line2) => {
+        const isSelf = line1.ID === line2.ID;
         const isSibling = line1.origin === line2.origin && line2.index - 1 === line1.index;
-        const int = !isSibling && line1.zIndex < line2.zIndex && lineIntersectsLine(line1, line2);
+        const int = !isSelf && !isSibling && line1.zIndex < line2.zIndex && lineIntersectsLine(line1, line2);
         if (int) res.push({ point: int, lineTouchedID: line2.ID });
     });
     return res;
@@ -137,11 +204,7 @@ function findAllIntersectionsOfLineToLineList(line1, list) {
  * @param line1
  * @param line2
  */
-function lineIntersectsLine(line1, line2) {
-    // const { x: x1, y: y1 } = line1[0];
-    // const { x: x2, y: y2 } = line1[1];
-    // const { x: x3, y: y3 } = line2[0];
-    // const { x: x4, y: y4 } = line2[1];
+export function lineIntersectsLine(line1, line2) {
     const x1 = line1.p1.x;
     const y1 = line1.p1.y;
     const x2 = line1.p2.x;
@@ -166,3 +229,10 @@ function lineIntersectsLine(line1, line2) {
 
     return false;
 }
+
+const calculateSlope = (line) => {
+    if (line.p2.x - line.p1.x === 0) {
+        return Infinity;
+    }
+    return (line.p2.y - line.p1.y) / (line.p2.x - line.p1.x);
+};
