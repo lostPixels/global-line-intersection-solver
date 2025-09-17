@@ -32,8 +32,8 @@ export default function solveMultiLineIntersections(multiLines: Multiline[], dis
 }
 
 function deconstructAllMultilines(multilines) {
-    const res = [];
-
+    const res = []; //Consider switching to Map here for resilence.
+    let ID = 0;
     multilines.forEach((line, i) => {
         line.forEach((p1, j) => {
             if (j < line.length - 1) {
@@ -41,10 +41,12 @@ function deconstructAllMultilines(multilines) {
                 res.push({
                     p1,
                     p2,
+                    ID,
                     origin: i,
                     index: j,
                     zIndex: i + j, //Todo use this for picking intersection winners.
                 });
+                ID++;
             }
         });
     });
@@ -68,9 +70,11 @@ function trimLines(lines) {
 
 function trimIndividualLine(line, list) {
     let intersections = findAllIntersectionsOfLineToLineList(line, list);
-    console.log(intersections);
+    if (intersections.length === 0) return [line];
 
-    return [line];
+    //Trim line down here.
+
+    return [];
 }
 
 //BBL
@@ -121,8 +125,9 @@ function findAllIntersectionsOfLineToLineList(line1, list) {
     const res = [];
 
     list.forEach((line2) => {
-        const int = line1.zIndex < line2.zIndex && lineIntersectsLine(line1, line2);
-        if (int) res.push(int);
+        const isSibling = line1.origin === line2.origin && line2.index - 1 === line1.index;
+        const int = !isSibling && line1.zIndex < line2.zIndex && lineIntersectsLine(line1, line2);
+        if (int) res.push({ point: int, lineTouchedID: line2.ID });
     });
     return res;
 }
