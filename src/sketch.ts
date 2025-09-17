@@ -18,8 +18,12 @@ window.draw = () => {
     const lines = [
         [
             { x: 100, y: 100 },
+            { x: 200, y: 100 },
+            { x: 120, y: 150 },
             { x: 621, y: 550 },
             { x: 125, y: 500 },
+            { x: 225, y: 500 },
+            { x: 230, y: 450 },
             { x: 525, y: 50 },
             { x: 725, y: 250 },
             { x: 100, y: 600 },
@@ -43,13 +47,13 @@ window.draw = () => {
 
     strokeWeight(4);
     //console.log(result);
-    result.forEach((lineGroup, i) => {
-        let baseHue = i * 50;
-        lineGroup.forEach((l, j) => {
-            stroke(baseHue + 3 * j, 100, 60);
-            drawLine(l);
-        });
-    });
+    // result.forEach((lineGroup, i) => {
+    //     let baseHue = i * 50;
+    //     lineGroup.forEach((l, j) => {
+    //         stroke(baseHue + 3 * j, 100, 60);
+    //         drawLine(l);
+    //     });
+    // });
 
     noLoop();
     if (urlParams.has("saveCanvas") && urlParams.get("saveCanvas") === "true") {
@@ -57,8 +61,8 @@ window.draw = () => {
     }
 };
 
-const drawLine = (points) => {
+export function drawLine(points) {
     beginShape();
     points.forEach((p) => vertex(p.x, p.y));
     endShape();
-};
+}
