@@ -1,4 +1,4 @@
-import { angle } from "ga-lib";
+import { angle, translatePolygon } from "ga-lib";
 import { drawLine } from "../sketch";
 
 interface Point {
@@ -25,7 +25,7 @@ export default function solveMultiLineIntersections(multiLines: Multiline[], dis
     //     drawLine([l.p1, l.p2]);
     // });
 
-    result.forEach((l) => {
+    result.forEach((l, i) => {
         stroke(random(360), 80, random(20, 70));
         strokeWeight(5);
         drawLine(l);
@@ -46,7 +46,7 @@ function deconstructAllMultilines(multilines) {
                     ID,
                     origin: i,
                     index: j,
-                    zIndex: i + j, //Todo use this for picking intersection winners.
+                    zIndex: ID, //Todo use this for picking intersection winners.
                 });
                 ID++;
             }
@@ -188,14 +188,19 @@ function findAllSelfIntersectionsOfMultiline(multiLine, distanceThreshold) {
 }
 
 function findAllIntersectionsOfLineToLineList(line1, list) {
-    const res = [];
+    let res = [];
 
     list.forEach((line2) => {
         const isSelf = line1.ID === line2.ID;
-        const isSibling = line1.origin === line2.origin && line2.index - 1 === line1.index;
-        const int = !isSelf && !isSibling && line1.zIndex < line2.zIndex && lineIntersectsLine(line1, line2);
+        const isBelow = line1.zIndex > line2.zIndex;
+        //There's probably a faster way to determine this.
+        const isSibling = linesSharePoint(line1, line2);
+        const int = isBelow && !isSelf && !isSibling && lineIntersectsLine(line1, line2);
         if (int) res.push({ point: int, lineTouchedID: line2.ID });
     });
+
+    res = res.sort((a, b) => dist(a.point.x, a.point.y, line1.p1.x, line1.p1.y) - dist(b.point.x, b.point.y, line1.p1.x, line1.p1.y));
+
     return res;
 }
 
@@ -236,3 +241,5 @@ const calculateSlope = (line) => {
     }
     return (line.p2.y - line.p1.y) / (line.p2.x - line.p1.x);
 };
+
+const linesSharePoint = (line1, line2) => (line1.p2.x === line2.p1.x && line1.p2.y === line2.p1.y) || (line1.p1.x === line2.p2.x && line1.p1.y === line2.p2.y);
