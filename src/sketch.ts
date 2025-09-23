@@ -1,5 +1,5 @@
 import * as p5Global from "p5/global";
-import { saveCanvasToFile, manageSeedState, rotatePolygonAroundPoint } from "ga-lib";
+import { saveCanvasToFile, manageSeedState, rotatePolygonAroundPoint, pCircle } from "ga-lib";
 import solveMultiLineIntersections, { calculateNewLineEnding, lineIntersectsLine } from "./lib/multiline-intersection-solver";
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -12,35 +12,36 @@ window.setup = () => {
 
 window.draw = () => {
     background(240);
-    randomSeed(100);
+    randomSeed(130);
     strokeWeight(1);
     noFill();
 
-    const lines = [
-        [
-            { x: 100, y: 100 },
-            { x: 500, y: 600 },
-            { x: 460, y: 400 },
-            { x: 800, y: 500 },
+    const lines = [];
+    // lines.push(pCircle(300, 300, 500));
+    // lines.push([
+    //     { x: 450, y: 5 },
+    //     { x: 700, y: 600 },
+    // ]);
 
-            //{ x: mouseX, y: mouseY },
-            // { x: 120, y: 150 },
-            // { x: 621, y: 550 },
-            // { x: 125, y: 500 },
-            // { x: 225, y: 500 },
-            // { x: 230, y: 450 },
-            // { x: 525, y: 50 },
-            // { x: mouseX, y: mouseY },
-            // { x: 725, y: 250 },
-            // { x: 100, y: 600 },
-        ],
-    ];
+    lines.push([
+        { x: 120, y: 150 },
+        { x: 621, y: 550 },
+        { x: 125, y: 500 },
+        //{ x: 990, y: 115 },
+        // { x: 225, y: 500 },
+        // { x: 230, y: 450 },
+        // { x: 525, y: 50 },
+        { x: mouseX, y: mouseY },
+        // { x: 725, y: 250 },
+        // { x: 100, y: 600 },
+    ]);
     lines.push([
         { x: 20, y: 200 },
         { x: 900, y: 170 },
-        { x: 300, y: 630 },
-        { x: 350, y: 630 },
-        { x: 150, y: 640 },
+        { x: 325, y: 525 },
+        { x: 900, y: 500 },
+        // { x: 350, y: 630 },
+        // { x: 150, y: 640 },
     ]);
 
     lines.forEach((l, i) => {
@@ -51,7 +52,7 @@ window.draw = () => {
 
     strokeWeight(1);
     stroke(0);
-    const result = solveMultiLineIntersections(lines, 20);
+    const result = solveMultiLineIntersections(lines, 15);
 
     strokeWeight(4);
     //console.log(result);

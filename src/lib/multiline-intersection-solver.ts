@@ -16,7 +16,8 @@ interface Multiline {
  * @returns
  */
 export default function solveMultiLineIntersections(multiLines: Multiline[], distanceThreshold: number) {
-    const lines = deconstructAllMultilines(multiLines);
+    let lines = deconstructAllMultilines(multiLines);
+    lines = eliminateSegmentsWhichAreTooCloseToOtherLines(lines);
     const result = trimLines(lines, distanceThreshold);
 
     // lines.forEach((l) => {
@@ -77,17 +78,29 @@ function trimIndividualLine(line, list, distanceThreshold) {
     let intersections = findAllIntersectionsOfLineToLineList(line, list);
     if (intersections.length === 0) return [[line.p1, line.p2]];
 
+    const firstIntersectionPoint = intersections[0].point;
+    const lastIntersectionPoint = intersections.at(-1).point;
+
     intersections.forEach((int, i) => {
-        if (i === 0) newLine.push(line.p1);
+        const startDist = dist(line.p1.x, line.p1.y, firstIntersectionPoint.x, firstIntersectionPoint.y);
 
         const otherLine = list[int.lineTouchedID];
         let res = calculateNewLineEnding(line, otherLine, int.point, distanceThreshold);
-        newLine.push(res[1]);
-        lines.push(newLine);
-        newLine = [res[0]];
+        if (res) {
+            if (i === 0 && res.p1) newLine.push(line.p1);
+            if (res.p2) newLine.push(res.p2);
+            lines.push(newLine);
+            newLine = [];
+            if (res.p1) newLine.push(res.p1);
+        }
+
         //newLine.push(line.p2);
     });
-    newLine.push(line.p2);
+
+    if (dist(line.p2.x, line.p2.y, lastIntersectionPoint.x, lastIntersectionPoint.y) >= distanceThreshold) {
+        newLine.push(line.p2);
+    }
+
     if (newLine.length > 0) lines.push(newLine);
     return lines;
 }
@@ -139,8 +152,46 @@ export function calculateNewLineEnding(line1, line2, centerPoint, distanceThresh
         y: centerPoint.y - distFromCenter * unitVec.y,
     };
 
-    let results = [point1, point2].sort((a, b) => dist(a.x, a.y, line1.p2.x, line1.p2.y) - dist(b.x, b.y, line1.p2.x, line1.p2.y));
-    return results;
+    //let res = [point1, point2];
+    let res = { p1: false, p2: false };
+
+    const p1LineDist = getShortestDistance(line1.p1, [line2.p1, line2.p2]);
+    const p2LineDist = getShortestDistance(line1.p2, [line2.p1, line2.p2]);
+    res.p1 = point1;
+    res.p2 = point2;
+    if (p1LineDist < distanceThreshold) {
+        // fill("red");
+        // circle(line1.p1.x, line1.p1.y, 20);
+        // noFill();
+        res.p2 = false;
+        //res.p2 = false;
+    }
+
+    if (p2LineDist < distanceThreshold) {
+        res.p1 = false;
+        // fill("red");
+        // circle(line1.p2.x, line1.p2.y, 20);
+        // noFill();
+    }
+
+    // const p1Dist = dist(point1.x, point1.y, centerPoint.x, centerPoint.y);
+    // const p2Dist = dist(point2.x, point2.y, centerPoint.x, centerPoint.y);
+
+    // if (p2Dist < p1Dist) {
+    //     fill("red");
+    //     circle(point1.x, point1.y, 10);
+
+    //     fill("blue");
+    //     circle(centerPoint.x, centerPoint.y, 10);
+
+    //     noFill();
+    //     fill("purple");
+    //     circle(point2.x, point2.y, 15);
+    //     noFill();
+    // }
+
+    return res;
+    //return res.sort((a, b) => dist(a.x, a.y, line1.p2.x, line1.p2.y) - dist(b.x, b.y, line1.p2.x, line1.p2.y));
 }
 
 //BBL
@@ -243,3 +294,48 @@ const calculateSlope = (line) => {
 };
 
 const linesSharePoint = (line1, line2) => (line1.p2.x === line2.p1.x && line1.p2.y === line2.p1.y) || (line1.p1.x === line2.p2.x && line1.p1.y === line2.p2.y);
+
+/**
+ * Calculates the shortest distance between a point and a line segment.
+ *
+ * @param {{x: number, y: number}} point - The point, e.g., { x: 10, y: 10 }.
+ * @param {Array<{x: number, y: number}>} lineSegment - An array of two points defining the segment, e.g., [{x: 0, y: 0}, {x: 20, y: 0}].
+ * @returns {number} The shortest distance between the point and the line segment.
+ */
+function getShortestDistance(point, lineSegment) {
+    const p = point;
+    const p1 = lineSegment[0];
+    const p2 = lineSegment[1];
+
+    // Calculate the squared length of the line segment.
+    // Using the squared length is more efficient as it avoids a square root.
+    const lengthSq = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
+
+    // Handle the case where the line segment is actually a point.
+    if (lengthSq === 0) {
+        return Math.sqrt((p.x - p1.x) ** 2 + (p.y - p1.y) ** 2);
+    }
+
+    // 't' is the parameter of the projection of the point onto the line.
+    // It represents how far along the line segment the closest point is.
+    let t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / lengthSq;
+
+    // Clamp 't' to the range [0, 1] to handle the three scenarios.
+    // If t < 0, the closest point is p1.
+    // If t > 1, the closest point is p2.
+    // If 0 <= t <= 1, the closest point is on the segment.
+    t = Math.max(0, Math.min(1, t));
+
+    // Find the coordinates of the closest point on the line segment.
+    const closestPoint = {
+        x: p1.x + t * (p2.x - p1.x),
+        y: p1.y + t * (p2.y - p1.y),
+    };
+
+    // Return the distance between the original point and the closest point.
+    return Math.sqrt((p.x - closestPoint.x) ** 2 + (p.y - closestPoint.y) ** 2);
+}
+
+function eliminateSegmentsWhichAreTooCloseToOtherLines(lines) {
+    return lines;
+}
