@@ -17,45 +17,53 @@ window.draw = () => {
     noFill();
 
     const lines = [];
-    // lines.push(pCircle(300, 300, 500));
-    // lines.push([
-    //     { x: 450, y: 5 },
-    //     { x: 700, y: 600 },
-    // ]);
 
-    // Test case for three lines intersecting at top-left
-    // Line 1: diagonal from top-left
+    // Create a circle with many segments
+    lines.push(pCircle(mouseX, mouseY, 300));
 
+    // Add a line that passes tangentially close to the circle
     lines.push([
-        { x: 400, y: 500 },
-        { x: 850, y: 550 },
-        { x: mouseX, y: mouseY },
+        { x: 50, y: 500 },
+        { x: 750, y: 500 },
+        { x: 400, y: 200 },
+        { x: 100, y: 600 },
     ]);
 
-    lines.push(pCircle(400, 400, 500, 48));
+    // Add another line that intersects the circle
+    lines.push([
+        { x: 200, y: 200 },
+        { x: 600, y: 500 },
+    ]);
 
+    // Draw original lines faintly
     lines.forEach((l, i) => {
-        stroke(i * 50, 10, 80);
+        stroke(0, 0, 60, 0.3);
+        strokeWeight(1);
         drawLine(l);
-        l.forEach((v) => circle(v.x, v.y, 3));
+        // Draw vertices as small dots
+        l.forEach((v) => {
+            stroke(0, 0, 40, 0.5);
+            circle(v.x, v.y, 2);
+        });
     });
 
-    strokeWeight(1);
-    stroke(0);
-    const result = solveMultiLineIntersections(lines, 40);
+    // Process with intersection solver
+    const distanceThreshold = 10;
+    const result = solveMultiLineIntersections(lines, distanceThreshold);
 
+    // Draw the processed result with vibrant colors
     strokeWeight(4);
-    //console.log(result);
-    // result.forEach((lineGroup, i) => {
-    //     let baseHue = i * 50;
-    //     lineGroup.forEach((l, j) => {
-    //         stroke(baseHue + 3 * j, 100, 60);
-    //         drawLine(l);
-    //     });
-    // });
+    // Result is already drawn by the solver function
 
-    //noLoop();
+    // Draw distance threshold visualization
+    stroke(0, 0, 90, 0.1);
+    strokeWeight(distanceThreshold * 2);
+    lines.forEach((l) => {
+        drawLine(l);
+    });
+
     if (urlParams.has("saveCanvas") && urlParams.get("saveCanvas") === "true") {
+        noLoop();
         saveCanvasToFile("gen-art-sketch", false, "png"); //Set to SVG as needed.
     }
 };
