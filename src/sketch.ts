@@ -23,36 +23,26 @@ window.draw = () => {
     //     { x: 700, y: 600 },
     // ]);
 
+    // Test case for three lines intersecting at top-left
+    // Line 1: diagonal from top-left
+
     lines.push([
-        { x: 120, y: 150 },
-        { x: 621, y: 550 },
-        { x: 125, y: 500 },
-        //{ x: 990, y: 115 },
-        // { x: 225, y: 500 },
-        // { x: 230, y: 450 },
-        // { x: 525, y: 50 },
+        { x: 400, y: 500 },
+        { x: 850, y: 550 },
         { x: mouseX, y: mouseY },
-        // { x: 725, y: 250 },
-        // { x: 100, y: 600 },
     ]);
-    lines.push([
-        { x: 20, y: 200 },
-        { x: 900, y: 170 },
-        { x: 325, y: 525 },
-        { x: 900, y: 500 },
-        // { x: 350, y: 630 },
-        // { x: 150, y: 640 },
-    ]);
+
+    lines.push(pCircle(400, 400, 500, 48));
 
     lines.forEach((l, i) => {
         stroke(i * 50, 10, 80);
         drawLine(l);
-        l.forEach((v) => circle(v.x, v.y, 8));
+        l.forEach((v) => circle(v.x, v.y, 3));
     });
 
     strokeWeight(1);
     stroke(0);
-    const result = solveMultiLineIntersections(lines, 15);
+    const result = solveMultiLineIntersections(lines, 40);
 
     strokeWeight(4);
     //console.log(result);
@@ -64,7 +54,7 @@ window.draw = () => {
     //     });
     // });
 
-    // noLoop();
+    //noLoop();
     if (urlParams.has("saveCanvas") && urlParams.get("saveCanvas") === "true") {
         saveCanvasToFile("gen-art-sketch", false, "png"); //Set to SVG as needed.
     }
