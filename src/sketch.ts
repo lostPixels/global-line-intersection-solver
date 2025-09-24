@@ -1,6 +1,7 @@
 import * as p5Global from "p5/global";
 import { saveCanvasToFile, manageSeedState, rotatePolygonAroundPoint, pCircle } from "ga-lib";
 import solveMultiLineIntersections, { calculateNewLineEnding, lineIntersectsLine } from "./lib/multiline-intersection-solver";
+import { viewMultilinesDepth } from "./lib/multiline-utilities";
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -18,22 +19,31 @@ window.draw = () => {
 
     const lines = [];
 
-    // Create a circle with many segments
-    lines.push(pCircle(mouseX, mouseY, 300));
+    // // Add a simple circle to verify it's still preserved
+    // lines.push(pCircle(200, 200, 200, 32));
+    // lines.push(pCircle(300, 300, 300, 16));
 
-    // Add a line that passes tangentially close to the circle
-    lines.push([
-        { x: 50, y: 500 },
-        { x: 750, y: 500 },
-        { x: 400, y: 200 },
-        { x: 100, y: 600 },
-    ]);
+    // for (let y = 5; y < height; y += 20) {
+    //     lines.push([
+    //         { x: 0, y },
+    //         { x: width, y },
+    //     ]);
+    // }
 
-    // Add another line that intersects the circle
-    lines.push([
-        { x: 200, y: 200 },
-        { x: 600, y: 500 },
-    ]);
+    let l = [];
+    let i = 0;
+    for (let x = 100; x < width - 100; x += 3) {
+        let tX = x + sin(i) * 100;
+        let tY = 300 + cos(i) * 200;
+        let z = round(random(-100, 100));
+        l.push({ x: tX, y: tY, z });
+        i += 0.2;
+    }
+    lines.push(l);
+
+    // viewMultilinesDepth(lines);
+    // noLoop();
+    // return;
 
     // Draw original lines faintly
     lines.forEach((l, i) => {
@@ -48,8 +58,13 @@ window.draw = () => {
     });
 
     // Process with intersection solver
-    const distanceThreshold = 10;
-    const result = solveMultiLineIntersections(lines, distanceThreshold);
+    const distanceThreshold = 20;
+    // Enable self-proximity handling with minimum distance of 10 segments
+    // This ensures adjacent segments in curves are preserved but parallel sections get trimmed
+    const result = solveMultiLineIntersections(lines, distanceThreshold, {
+        handleSelfProximity: true,
+        selfProximityMinDistance: 2,
+    });
 
     // Draw the processed result with vibrant colors
     strokeWeight(4);
@@ -58,6 +73,7 @@ window.draw = () => {
     // Draw distance threshold visualization
     stroke(0, 0, 90, 0.1);
     strokeWeight(distanceThreshold * 2);
+    noLoop();
     lines.forEach((l) => {
         drawLine(l);
     });

@@ -9,17 +9,23 @@ interface Point {
 interface Multiline {
     points: Point[];
 }
+
+interface SolverOptions {
+    handleSelfProximity?: boolean; // Whether to trim non-adjacent segments within same multiline
+    selfProximityMinDistance?: number; // Minimum index distance for self-proximity checks (default: 3)
+}
 /**
  * Accepts an array of Multi-lines and returns new fragments of those multilines that have intersections removed based on distance.
  * @param multiLines
  * @param distanceThreshold
  * @returns
  */
-export default function solveMultiLineIntersections(multiLines: Multiline[], distanceThreshold: number) {
+export default function solveMultiLineIntersections(multiLines: Multiline[], distanceThreshold: number, options: SolverOptions = {}) {
+    const { handleSelfProximity = true, selfProximityMinDistance = 3 } = options;
     let lines = deconstructAllMultilines(multiLines);
     // First handle proximity-based trimming for non-intersecting segments
-    lines = trimSegmentsByProximity(lines, distanceThreshold);
-    const result = trimLines(lines, distanceThreshold);
+    lines = trimSegmentsByProximity(lines, distanceThreshold, handleSelfProximity, selfProximityMinDistance);
+    const result = trimLines(lines, distanceThreshold, handleSelfProximity, selfProximityMinDistance);
 
     // Reconstruct multilines from segments where possible
     const reconstructed = reconstructMultilines(result);
@@ -40,20 +46,23 @@ export default function solveMultiLineIntersections(multiLines: Multiline[], dis
     return reconstructed;
 }
 
-function deconstructAllMultilines(multilines: any[]) {
+export function deconstructAllMultilines(multilines: any[]) {
     const res: any[] = []; //Consider switching to Map here for resilence.
     let ID = 0;
     multilines.forEach((line, i) => {
+        if (line[0].z === undefined) console.warn(`Line ${i} is missing z coordinate`);
+
         line.forEach((p1, j) => {
             if (j < line.length - 1) {
                 const p2 = line[j + 1];
+                const z = p1.z ? (p1.z + p2.z) / 2 : 0;
                 res.push({
                     p1,
                     p2,
                     ID,
                     origin: i,
                     index: j,
-                    zIndex: ID, //Todo use this for picking intersection winners.
+                    zIndex: z, //Todo use this for picking intersection winners.
                 });
                 ID++;
             }
@@ -62,7 +71,7 @@ function deconstructAllMultilines(multilines: any[]) {
     return res;
 }
 
-function trimLines(lines: any[], distanceThreshold: number) {
+function trimLines(lines: any[], distanceThreshold: number, handleSelfProximity: boolean = true, selfProximityMinDistance: number = 3) {
     // First pass: trim all lines
     let i = 0;
     const length = lines.length;
@@ -70,29 +79,29 @@ function trimLines(lines: any[], distanceThreshold: number) {
 
     while (i < length) {
         const list = lines;
-        const trimResult = trimIndividualLine(lines[i], list, distanceThreshold);
+        const trimResult = trimIndividualLine(lines[i], list, distanceThreshold, handleSelfProximity, selfProximityMinDistance);
         if (trimResult.length) res = res.concat(trimResult);
         i++;
     }
 
     // Second pass: filter out tiny segments that might have been created
-    res = res.filter((segment) => {
-        if (segment.length < 2) return false;
-        const totalLength = segment.reduce((acc, p, idx) => {
-            if (idx === 0) return 0;
-            return acc + dist(segment[idx - 1].x, segment[idx - 1].y, p.x, p.y);
-        }, 0);
-        return totalLength > distanceThreshold * 0.5;
-    });
+    // res = res.filter((segment) => {
+    //     //if (segment.length < 2) return false;
+    //     const totalLength = segment.reduce((acc, p, idx) => {
+    //         if (idx === 0) return 0;
+    //         return acc + dist(segment[idx - 1].x, segment[idx - 1].y, p.x, p.y);
+    //     }, 0);
+    //     return totalLength > distanceThreshold * 0.5;
+    // });
 
     return res;
 }
 
-function trimIndividualLine(line: any, list: any[], distanceThreshold: number) {
+function trimIndividualLine(line: any, list: any[], distanceThreshold: number, handleSelfProximity: boolean = true, selfProximityMinDistance: number = 3) {
     let lines: any[][] = [];
     let newLine: any[] = [];
 
-    let intersections: any[] = findAllIntersectionsOfLineToLineList(line, list);
+    let intersections: any[] = findAllIntersectionsOfLineToLineList(line, list, handleSelfProximity, selfProximityMinDistance);
     if (intersections.length === 0) return [[line.p1, line.p2]];
 
     // Group intersections that are too close together and keep only the most relevant one
@@ -368,14 +377,41 @@ function findAllSelfIntersectionsOfMultiline(multiLine: any[], distanceThreshold
     return result;
 }
 
-function findAllIntersectionsOfLineToLineList(line1: any, list: any[]) {
+function findAllIntersectionsOfLineToLineList(line1: any, list: any[], handleSelfProximity: boolean = true, selfProximityMinDistance: number = 3) {
     let res: any[] = [];
 
     list.forEach((line2, index) => {
         const isSelf = line1.ID === line2.ID;
+        const isSameOrigin = line1.origin === line2.origin;
         const isBelow = line1.zIndex > line2.zIndex;
         //There's probably a faster way to determine this.
         const isSibling = linesSharePoint(line1, line2);
+
+        // Handle same-origin segments intelligently
+        if (isSameOrigin) {
+            if (!handleSelfProximity) {
+                // If self-proximity handling is disabled, skip all same-origin segments
+                return;
+            }
+
+            // Calculate segment distance in the multiline
+            const indexDistance = Math.abs(line1.index - line2.index);
+
+            // Skip adjacent segments to preserve shape continuity
+            // This preserves circles and smooth curves
+            if (indexDistance <= selfProximityMinDistance) {
+                return;
+            }
+
+            // For far-apart segments in the same multiline, check if they actually intersect
+            // This handles self-intersecting shapes like figure-8s
+            if (!lineIntersectsLine(line1, line2)) {
+                return;
+            }
+
+            // At this point we have a legitimate self-intersection between non-adjacent segments
+        }
+
         const int = isBelow && !isSelf && !isSibling && lineIntersectsLine(line1, line2);
         if (int) {
             res.push({
@@ -430,7 +466,15 @@ const calculateSlope = (line: any) => {
     return (line.p2.y - line.p1.y) / (line.p2.x - line.p1.x);
 };
 
-const linesSharePoint = (line1: any, line2: any) => (line1.p2.x === line2.p1.x && line1.p2.y === line2.p1.y) || (line1.p1.x === line2.p2.x && line1.p1.y === line2.p2.y);
+const linesSharePoint = (line1: any, line2: any) => {
+    const tolerance = 0.001; // Small tolerance for floating point comparison
+    return (
+        (Math.abs(line1.p2.x - line2.p1.x) < tolerance && Math.abs(line1.p2.y - line2.p1.y) < tolerance) ||
+        (Math.abs(line1.p1.x - line2.p2.x) < tolerance && Math.abs(line1.p1.y - line2.p2.y) < tolerance) ||
+        (Math.abs(line1.p1.x - line2.p1.x) < tolerance && Math.abs(line1.p1.y - line2.p1.y) < tolerance) ||
+        (Math.abs(line1.p2.x - line2.p2.x) < tolerance && Math.abs(line1.p2.y - line2.p2.y) < tolerance)
+    );
+};
 
 /**
  * Calculates the shortest distance between a point and a line segment.
@@ -478,23 +522,69 @@ function getShortestDistance(point: any, lineSegment: any[]) {
  * This handles cases where small segments are entirely within the distance threshold
  * of another line, or where segments run parallel and close to each other.
  */
-function trimSegmentsByProximity(lines: any[], distanceThreshold: number): any[] {
+function trimSegmentsByProximity(lines: any[], distanceThreshold: number, handleSelfProximity: boolean = true, selfProximityMinDistance: number = 3): any[] {
     const processedLines: any[] = [];
 
     for (let i = 0; i < lines.length; i++) {
         const currentLine = lines[i];
-        const segmentLength = dist(currentLine.p1.x, currentLine.p1.y, currentLine.p2.x, currentLine.p2.y);
 
-        // Collect all segments to process for this line
+        // Track if this line should be kept
+        let shouldKeep = true;
         let segmentsToAdd: any[] = [currentLine];
 
-        // Check against all lines with higher priority (lower zIndex)
+        // Check against all other lines
         for (let j = 0; j < lines.length; j++) {
             if (i === j) continue;
             const otherLine = lines[j];
 
-            // Only check against higher priority lines
-            if (otherLine.zIndex >= currentLine.zIndex) continue;
+            // Handle segments from the same original multiline intelligently
+            if (currentLine.origin === otherLine.origin) {
+                if (!handleSelfProximity) {
+                    // If self-proximity handling is disabled, skip all same-origin segments
+                    continue;
+                }
+
+                // Calculate index distance in the multiline sequence
+                const indexDistance = Math.abs(currentLine.index - otherLine.index);
+                const totalSegments = lines.filter((l) => l.origin === currentLine.origin).length;
+
+                // For closed shapes (like circles), also check wrap-around distance
+                // But only if it's actually a closed shape (last segment connects to first)
+                let effectiveDistance = indexDistance;
+                const isClosedShape = totalSegments > 2 && indexDistance > totalSegments / 2;
+                if (isClosedShape) {
+                    const wrapDistance = totalSegments - indexDistance;
+                    effectiveDistance = Math.min(indexDistance, wrapDistance);
+                }
+
+                // Skip if segments are adjacent or very close in sequence
+                // This preserves the continuity of shapes while still handling self-overlaps
+                if (effectiveDistance <= selfProximityMinDistance) {
+                    continue;
+                }
+
+                // For non-adjacent segments from the same multiline, only process if they're
+                // actually close in space (do a quick distance check)
+                const quickDist = Math.min(
+                    dist(currentLine.p1.x, currentLine.p1.y, otherLine.p1.x, otherLine.p1.y),
+                    dist(currentLine.p1.x, currentLine.p1.y, otherLine.p2.x, otherLine.p2.y),
+                    dist(currentLine.p2.x, currentLine.p2.y, otherLine.p1.x, otherLine.p1.y),
+                    dist(currentLine.p2.x, currentLine.p2.y, otherLine.p2.x, otherLine.p2.y),
+                );
+
+                // If segments are far apart in space, skip the proximity check
+                if (quickDist > distanceThreshold * 2) {
+                    continue;
+                }
+
+                // At this point, we have non-adjacent segments from the same multiline
+                // that are close in space - these should be subject to proximity trimming
+            }
+
+            // Only check against higher priority lines (lower zIndex)
+            if (otherLine.zIndex >= currentLine.zIndex) {
+                continue;
+            }
 
             // Skip if lines share a point (they're connected)
             if (linesSharePoint(currentLine, otherLine)) continue;
@@ -514,31 +604,57 @@ function trimSegmentsByProximity(lines: any[], distanceThreshold: number): any[]
                     };
                     const midDist = getShortestDistance(midPoint, [otherLine.p1, otherLine.p2]);
 
-                    // If all points are within threshold, don't add this segment
-                    if (!(p1Dist < distanceThreshold && p2Dist < distanceThreshold && midDist < distanceThreshold)) {
-                        newSegments.push(segment);
+                    // Only remove if ALL points are within threshold
+                    // For same-origin segments, be stricter to avoid removing parts of the shape
+                    const threshold = currentLine.origin === otherLine.origin ? distanceThreshold * 0.8 : distanceThreshold;
+                    const shouldRemove = p1Dist < threshold && p2Dist < threshold && midDist < threshold;
+                    if (!shouldRemove) {
+                        newSegments.push({
+                            ...segment,
+                            origin: currentLine.origin,
+                            index: currentLine.index,
+                            zIndex: currentLine.zIndex,
+                            ID: currentLine.ID,
+                        });
                     }
                 } else {
                     // For longer segments, check if they need to be split or trimmed
                     const trimmedSegments = trimSegmentByProximityToLine(segment, otherLine, distanceThreshold);
                     if (trimmedSegments && trimmedSegments.length > 0) {
-                        newSegments = newSegments.concat(trimmedSegments);
+                        for (const trimmed of trimmedSegments) {
+                            newSegments.push({
+                                ...trimmed,
+                                origin: currentLine.origin,
+                                index: currentLine.index,
+                                zIndex: currentLine.zIndex,
+                                ID: currentLine.ID,
+                            });
+                        }
                     }
                 }
             }
             segmentsToAdd = newSegments;
+
+            // If no segments left, mark as not to keep
+            if (segmentsToAdd.length === 0) {
+                shouldKeep = false;
+                break;
+            }
         }
 
         // Add all resulting segments
-        for (const segment of segmentsToAdd) {
-            // Only add segments that have sufficient length
-            const len = dist(segment.p1.x, segment.p1.y, segment.p2.x, segment.p2.y);
-            if (len > distanceThreshold * 0.3) {
-                processedLines.push({
-                    ...currentLine,
-                    p1: segment.p1,
-                    p2: segment.p2,
-                });
+        if (shouldKeep) {
+            for (const segment of segmentsToAdd) {
+                // Only add segments that have sufficient length - use a very small threshold to preserve most segments
+                const len = dist(segment.p1.x, segment.p1.y, segment.p2.x, segment.p2.y);
+                if (len > 1) {
+                    // Changed from distanceThreshold * 0.3 to just 1 pixel
+                    processedLines.push({
+                        ...currentLine,
+                        p1: segment.p1,
+                        p2: segment.p2,
+                    });
+                }
             }
         }
     }
@@ -615,9 +731,10 @@ function trimSegmentByProximityToLine(segment: any, otherLine: any, distanceThre
         const startT = Math.max(0, region.startT - bufferT);
         const endT = Math.min(1, region.endT + bufferT);
 
-        // Only add if the resulting segment is long enough
+        // Only add if the resulting segment is long enough - use smaller threshold
         const regionLength = (endT - startT) * segmentLength;
-        if (regionLength > distanceThreshold * 0.3) {
+        if (regionLength > 1) {
+            // Changed from distanceThreshold * 0.3 to just 1 pixel
             resultSegments.push({
                 ...segment,
                 p1: {
